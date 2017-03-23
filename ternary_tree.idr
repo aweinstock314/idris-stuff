@@ -72,24 +72,6 @@ powerMonotonicBase {n} {m} (S x) lte = left `lteTransitive` right where
     right : LTE (n * power m (S x)) (power m (S (S x)))
     right = multMonotonicRight (power m (S x)) lte
 
-powerMonotonicExp : (i : Nat) -> (j : Nat) -> (b : Nat) -> LTE i j -> LTE (power (S b) i) (power (S b) j)
-powerMonotonicExp Z Z b lte = lteRefl
-powerMonotonicExp Z (S j') b lte = ?pow_mon_exp_1
-powerMonotonicExp (S i') Z b lte = ?pow_mon_exp_2
-powerMonotonicExp (S i') (S j') b lte = multMonotonicLeft (S b) ind where
-    ind : LTE (power (S b) i') (power (S b) j')
-    ind = powerMonotonicExp i' j' b (fromLteSucc lte)
-
-
-multDistributesOverSuccLeft : (n : Nat) -> (m : Nat) -> n + (mult m n) = mult n (S m)
-multDistributesOverSuccLeft n m = rewrite multCommutative n (S m) in Refl
-
-aPlusBMinusAIsB : (a : Nat) -> (b : Nat) -> {smaller : LTE a b} -> (a + (b - a)) = b
-aPlusBMinusAIsB Z Z = Refl
-aPlusBMinusAIsB (S x) Z {smaller} = absurd (succNotLTEzero smaller)
-aPlusBMinusAIsB Z (S y) = Refl
-aPlusBMinusAIsB (S x) (S y) {smaller} = cong (aPlusBMinusAIsB x y {smaller=fromLteSucc smaller})
-
 nonzeroPowerGTE1 : (n : Nat) -> (m : Nat) -> LTE 1 (power (S n) m)
 nonzeroPowerGTE1 Z y = reflToLTERefl . sym $ powerOneSuccOne y
 nonzeroPowerGTE1 (S x) Z = lteRefl
@@ -103,6 +85,24 @@ nonzeroPowerGTE1 (S x) (S y) = (ind `lteTransitive` ind') `lteTransitive` ind'' 
     ind' = lteMultRight x lteRefl
     ind'' : LTE (power (S x) (S y)) (power (S (S x)) (S y))
     ind'' = powerMonotonicBase y p1
+
+powerMonotonicExp : (i : Nat) -> (j : Nat) -> (b : Nat) -> LTE i j -> LTE (power (S b) i) (power (S b) j)
+powerMonotonicExp Z Z b lte = lteRefl
+powerMonotonicExp (S i') Z b lte = absurd (succNotLTEzero lte)
+powerMonotonicExp Z (S j') b lte = nonzeroPowerGTE1 b (S j')
+powerMonotonicExp (S i') (S j') b lte = multMonotonicLeft (S b) ind where
+    ind : LTE (power (S b) i') (power (S b) j')
+    ind = powerMonotonicExp i' j' b (fromLteSucc lte)
+
+
+multDistributesOverSuccLeft : (n : Nat) -> (m : Nat) -> n + (mult m n) = mult n (S m)
+multDistributesOverSuccLeft n m = rewrite multCommutative n (S m) in Refl
+
+aPlusBMinusAIsB : (a : Nat) -> (b : Nat) -> {smaller : LTE a b} -> (a + (b - a)) = b
+aPlusBMinusAIsB Z Z = Refl
+aPlusBMinusAIsB (S x) Z {smaller} = absurd (succNotLTEzero smaller)
+aPlusBMinusAIsB Z (S y) = Refl
+aPlusBMinusAIsB (S x) (S y) {smaller} = cong (aPlusBMinusAIsB x y {smaller=fromLteSucc smaller})
 
 data Tern = Root | Branch Tern Tern Tern
 
