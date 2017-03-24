@@ -51,6 +51,20 @@ minusMonotonic {n} {m} (S k') l1 l2 = ind'' where
     ind'' : LTE ((-) n (S k') {smaller=l1}) ((-) m (S k') {smaller=l1 `lteTransitive` l2})
     ind'' = rewrite p1 in rewrite p2 in ind'
 
+minusMonotonic' : (k : Nat) -> {n,m : Nat} -> LTE n m -> LTE (n `minus` k) (m `minus` k)
+minusMonotonic' {n} {m} Z l2 = rewrite minusZeroRight n in rewrite minusZeroRight m in l2
+minusMonotonic' {n} {m} (S k') l2 = ind'' where
+    ind : LTE (minus n k') (minus m k')
+    ind = minusMonotonic' k' l2
+    p1 : (minus n (S k')) = Prelude.Nat.pred (minus n k')
+    p1 = rewrite minusSuccPred n k' in Refl
+    p2 : (minus m (S k')) = Prelude.Nat.pred (minus m k')
+    p2 = rewrite minusSuccPred m k' in Refl
+    ind' : LTE (Prelude.Nat.pred (minus n k')) (Prelude.Nat.pred (minus m k'))
+    ind' = predMonotonic ind
+    ind'' : LTE (minus n (S k')) (minus m (S k'))
+    ind'' = rewrite p1 in rewrite p2 in ind'
+
 composeMonotonic : {f : Nat -> Nat} -> {g : Nat -> Nat} -> ({a, b : Nat} -> LTE a b -> LTE (f a) (f b)) -> ({n, m : Nat} -> LTE n m -> LTE (g n) (g m)) -> ({x, y : Nat} -> LTE x y -> LTE (f (g x)) (f (g y)))
 composeMonotonic {f} {g} monof monog = monoh where
     monoh : {x, y : Nat} -> LTE x y -> LTE (f (g x)) (f (g y))
@@ -131,6 +145,8 @@ powerMonotonicExp (S i') (S j') b lte = multMonotonicLeft (S b) ind where
     ind : LTE (power (S b) i') (power (S b) j')
     ind = powerMonotonicExp i' j' b (fromLteSucc lte)
 
+powerMonotonicExp' : (b : Nat) -> {i,j : Nat} -> LTE i j -> LTE (power (S b) i) (power (S b) j)
+powerMonotonicExp' b {i} {j} = powerMonotonicExp i j b
 
 multDistributesOverSuccLeft : (n : Nat) -> (m : Nat) -> n + (mult m n) = mult n (S m)
 multDistributesOverSuccLeft n m = rewrite multCommutative n (S m) in Refl
@@ -272,22 +288,39 @@ height_bound Root = lteAddRight 1
 height_bound (Branch t1 t2 t3) = ?y where
     f : Nat -> Nat
     f h = (-) (power 3 (S h)) 1 {smaller=nonzeroPowerGTE1 2 (S h)}
-    --monof : {n, m : Nat} -> LTE n m -> LTE (f n) (f m)
+    --g : Nat -> Nat
+    --g = (\x => x `minus` 1) . (\x => power 3 x) . S
+    monof : {n, m : Nat} -> LTE n m -> LTE (f n) (f m)
+    monof = composeMonotonic (minusMonotonic' 1) (powerMonotonicExp' 2) `composeMonotonic` LTESucc
     r1 : Nat
     r2 : Nat
     r3 : Nat
-    r1 = ((-) (power 3 (S (height t1))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t1))})
-    r2 = ((-) (power 3 (S (height t2))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t2))})
-    r3 = ((-) (power 3 (S (height t3))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t3))})
-    --r4 : maximum r1 r2 = ((-) (power 3 (S (height t1 `maximum` height t2))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t1 `maximum` height t2))})
-    --r4 = monotonicImpliesMaxHomomorphic ?x
+    r1 = f (height t1)
+    r2 = f (height t2)
+    r3 = f (height t3)
+    s1 : maximum r1 r2 = f (maximum (height t1) (height t2))
+    s1 = monotonicImpliesMaxHomomorphic monof
+    s2 : f (maximum (height t1) (height t2)) `maximum` r3 = f (maximum (height t1) (height t2) `maximum` (height t3))
+    s2 = monotonicImpliesMaxHomomorphic monof
+    s3 : maximum r1 r2 `maximum` r3 = f (maximum (height t1) (height t2) `maximum` height t3)
+    s3 = rewrite s1 in s2
     ind1 : LTE (nodes t1) r1
     ind1 = height_bound t1
     ind2 : LTE (nodes t2) r2
     ind2 = height_bound t2
     ind3 : LTE (nodes t3) r3
     ind3 = height_bound t3
+    maxHeight : Nat
+    maxHeight = (maximum (height t1) (height t2) `maximum` height t3)
     p1 : LTE (nodes t1 + nodes t2 + nodes t3) (r1 + r2 + r3)
     p1 = addLTE ind1 ind2 `addLTE` ind3
     p2 : LTE (r1 + r2 + r3) (3 * (maximum r1 r2 `maximum` r3))
     p2 = sumBoundedBy3Max
+    p3 : LTE (r1 + r2 + r3) (3 * f maxHeight)
+    p3 = rewrite sym s3 in p2
+    p4 : LTE (r1 + r2 + r3) (3 * ((power 3 (S maxHeight)) `minus` 1))
+    p4 = p3
+    p5 : LTE (r1 + r2 + r3) (3 * power 3 (S maxHeight) `minus` 3)
+    p5 = rewrite sym $ multDistributesOverMinusRight 3 (power 3 (S (maximum (height t1) (height t2) `maximum` height t3))) 1 in p4
+    p6 : LTE (r1 + r2 + r3) (power 3 (S (S maxHeight)) `minus` 3)
+    p6 = p5
