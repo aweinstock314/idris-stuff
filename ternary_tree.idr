@@ -1,6 +1,8 @@
 import Data.Vect
 import Data.Vect.Quantifiers
 
+%default total
+
 reflToLTERefl : n = m -> LTE n m
 reflToLTERefl Refl = lteRefl
 
@@ -8,9 +10,11 @@ oneLTENonzero : {n : Nat} -> LTE 1 (S n)
 oneLTENonzero {n=Z} = lteRefl
 oneLTENonzero {n=S m} = lteSuccRight oneLTENonzero
 
+{-
 nonzeroMultIsNonzero : (n : Nat) -> (m : Nat) -> LTE 1 (S n * S m)
 nonzeroMultIsNonzero Z Z = lteRefl
 nonzeroMultIsNonzero (S n) m = oneLTENonzero
+-}
 
 pow1n_GTE_1 : (n : Nat) -> LTE 1 (power 1 n)
 pow1n_GTE_1 n = reflToLTERefl . sym $ powerOneSuccOne n
@@ -18,9 +22,39 @@ pow1n_GTE_1 n = reflToLTERefl . sym $ powerOneSuccOne n
 pow0n_EQ_0 : power 0 (S k) = 0
 pow0n_EQ_0 = Refl
 
+succMonotonic : LTE n m -> LTE (S n) (S m)
+succMonotonic = LTESucc
+
 plusMonotonic : (k : Nat) -> LTE n m -> LTE (k + n) (k + m)
 plusMonotonic {n} {m} Z lte = lte
 plusMonotonic {n} {m} (S x) lte = LTESucc (plusMonotonic x lte)
+
+predMonotonic : LTE n m -> LTE (pred n) (pred m)
+predMonotonic LTEZero = LTEZero
+predMonotonic (LTESucc lte) = lte
+
+minusMonotonic : (k : Nat) -> (l1 : LTE k n) -> (l2 : LTE n m) -> LTE (n - k) ((-) m k {smaller=l1 `lteTransitive` l2})
+minusMonotonic {n} {m} Z l1 l2 = rewrite minusZeroRight n in rewrite minusZeroRight m in l2
+minusMonotonic {n} {m} (S k') l1 l2 = ind'' where
+    tmp : LTE k' (S k')
+    tmp = lteSuccRight lteRefl
+    tmp2 : LTE k' n
+    tmp2 = tmp `lteTransitive` l1
+    ind : LTE ((-) n k' {smaller=tmp2}) ((-) m k' {smaller=tmp2 `lteTransitive` l2})
+    ind = minusMonotonic k' tmp2 l2
+    p1 : ((-) n (S k') {smaller=l1}) = Prelude.Nat.pred ((-) n k' {smaller=tmp2})
+    p1 = rewrite minusSuccPred n k' in Refl
+    p2 : ((-) m (S k') {smaller=l1 `lteTransitive` l2}) = Prelude.Nat.pred ((-) m k' {smaller=tmp2 `lteTransitive` l2})
+    p2 = rewrite minusSuccPred m k' in Refl
+    ind' : LTE (Prelude.Nat.pred ((-) n k' {smaller=tmp2})) (Prelude.Nat.pred ((-) m k' {smaller=tmp2 `lteTransitive` l2}))
+    ind' = predMonotonic ind
+    ind'' : LTE ((-) n (S k') {smaller=l1}) ((-) m (S k') {smaller=l1 `lteTransitive` l2})
+    ind'' = rewrite p1 in rewrite p2 in ind'
+
+composeMonotonic : {f : Nat -> Nat} -> {g : Nat -> Nat} -> ({a, b : Nat} -> LTE a b -> LTE (f a) (f b)) -> ({n, m : Nat} -> LTE n m -> LTE (g n) (g m)) -> ({x, y : Nat} -> LTE x y -> LTE (f (g x)) (f (g y)))
+composeMonotonic {f} {g} monof monog = monoh where
+    monoh : {x, y : Nat} -> LTE x y -> LTE (f (g x)) (f (g y))
+    monoh lte = monof (monog lte)
 
 multMonotonicLeft : (k : Nat) -> LTE n m -> LTE (k `mult` n) (k `mult` m)
 multMonotonicLeft Z lte = LTEZero
@@ -114,6 +148,10 @@ lteMaximum {a=S a'} {b=S b'} = (LTESucc (fst ind), LTESucc (snd ind)) where
     ind : (LTE a' (maximum a' b'), LTE b' (maximum a' b'))
     ind = lteMaximum
 
+maximumLTE : LTE a b -> maximum a b = b
+maximumLTE LTEZero = Refl
+maximumLTE (LTESucc lte) = rewrite maximumLTE lte in Refl
+
 mapAll : {P, Q : a -> Type} -> (f : (x : a) -> P x -> Q x) -> All P xs -> All Q xs
 mapAll _ Nil = Nil
 mapAll {xs=i :: is} f (j :: js) = f i j :: mapAll f js
@@ -136,9 +174,16 @@ maximumVecBound {n=S m} (x :: xs) = step where
     step : All (\e => LTE e (foldr Maximum x xs)) (x :: xs)
     step = ?z
     --step = fst p1 :: mapAll {P=(\e => LTE e maxElt)} {Q=(\e => LTE e (maximum x maxElt))} (\e, lte => lte `lteTransitive` snd p1)
+-}
 
-sumBoundedByKMax : (x : Vect (S n) Nat) -> LTE (sum x) (S n * foldl1 max x)
-sumBoundedByKMax = ?a
+{-
+sumBoundedByKMax : (vec : Vect (S n) Nat) -> LTE (foldr (+) Z vec) (S n * foldr Maximum Z vec)
+sumBoundedByKMax (x :: []) = rewrite maximumZeroNLeft x in lteRefl
+sumBoundedByKMax {n=S m} (x :: xs) = ?sumBound where
+    p1 : LTE (foldr (+) Z xs) (S m * foldr Maximum Z xs)
+    p1 = sumBoundedByKMax xs
+    p2 : LTE (x + foldr (+) Z xs) (x + S m * foldr Maximum Z xs)
+    p2 = plusMonotonic x p1
 -}
 
 addLTE : LTE a b -> LTE x y -> LTE (a + x) (b + y)
@@ -173,13 +218,40 @@ sumBoundedBy3Max {a} {b} {c} = s where
     s : LTE (a+b+c) (3*x)
     s = rewrite sym r3 in q
 
+monotonicImpliesMaxHomomorphic : {f : Nat -> Nat} -> ({n, m : Nat} -> LTE n m -> LTE (f n) (f m)) -> maximum (f a) (f b) = f (maximum a b)
+monotonicImpliesMaxHomomorphic {a=Z} {b} {f} mono = maximumLTE (the (LTE (f 0) (f b)) (mono LTEZero))
+monotonicImpliesMaxHomomorphic {a=S a'} {b=Z} {f} mono = ?maxHom1 where
+    lteA : LTE Z a
+    lteA = LTEZero
+    --p2 : maximum (f a') (f Z) = f (maximum a' Z)
+    --p2 = monotonicImpliesMaxHomomorphic p3
+    {-
+    p1 : maximum (f a) (f 0) = f (maximum a 0)
+    p1 = 
+    --rewrite maximumCommutative a Z in 
+        rewrite maximumZeroNLeft a in 
+        rewrite maximumCommutative (f a) (f Z) in monotonicImpliesMaxHomomorphic mono
+    -}
+monotonicImpliesMaxHomomorphic {a=S a'} {b=S b'} {f} mono = ?maxHom2 where
+    mono' : {x, y : Nat} -> (LTE x y) -> (LTE (f (S x)) (f (S y)))
+    mono' lte = mono (LTESucc lte)
+    ind : maximum (f a') (f b') = f (maximum a' b')
+    ind = monotonicImpliesMaxHomomorphic mono
+    --ind' : maximum (f a') (f b') = f (S (maximum a' b'))
+    --ind' = monotonicImpliesMaxHomomorphic mono'
+    p1 : {x, y : Nat} -> LTE x y -> LTE (S (f x)) (S (f y))
+    p1 = composeMonotonic LTESucc mono
+    p2 : {x, y : Nat} -> LTE x y -> LTE (f (S x)) (f (S y))
+    p2 = composeMonotonic mono LTESucc
+    --ind : maximum (f a) (f b') = f (maximum a' (S b'))
+    --ind = monotonicImpliesMaxHomomorphic {f=f} mono'
+
 data Tern = Root | Branch Tern Tern Tern
 
 data CompleteTree : (n : Nat) -> Type where
     CRoot : CompleteTree (S n)
     CBranch : Vect (S n) (CompleteTree (S n)) -> CompleteTree (S n)
 
-total
 height : Tern -> Nat
 height Root = 0
 height (Branch t1 t2 t3) = (height t1 `max` height t2) `max` height t3 + 1
@@ -191,7 +263,6 @@ height' CRoot = 0
 height' (CBranch subtrees) = Data.Vect.foldl1 max (map height' subtrees)
 -}
 
-total
 nodes : Tern -> Nat
 nodes Root = 1
 nodes (Branch t1 t2 t3) = nodes t1 + nodes t2 + nodes t3 + 1
@@ -199,12 +270,17 @@ nodes (Branch t1 t2 t3) = nodes t1 + nodes t2 + nodes t3 + 1
 height_bound : (t : Tern) -> LTE (nodes t) ((-) (power 3 (S (height t))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t))})
 height_bound Root = lteAddRight 1
 height_bound (Branch t1 t2 t3) = ?y where
+    f : Nat -> Nat
+    f h = (-) (power 3 (S h)) 1 {smaller=nonzeroPowerGTE1 2 (S h)}
+    --monof : {n, m : Nat} -> LTE n m -> LTE (f n) (f m)
     r1 : Nat
     r2 : Nat
     r3 : Nat
     r1 = ((-) (power 3 (S (height t1))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t1))})
     r2 = ((-) (power 3 (S (height t2))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t2))})
     r3 = ((-) (power 3 (S (height t3))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t3))})
+    --r4 : maximum r1 r2 = ((-) (power 3 (S (height t1 `maximum` height t2))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t1 `maximum` height t2))})
+    --r4 = monotonicImpliesMaxHomomorphic ?x
     ind1 : LTE (nodes t1) r1
     ind1 = height_bound t1
     ind2 : LTE (nodes t2) r2
