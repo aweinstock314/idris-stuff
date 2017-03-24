@@ -40,3 +40,23 @@ multMonotonicLeft {n} {m} (S x) lte = y1 where
     -}
 -}
 
+{-
+foo : S (maximum a b) = maximum (S a) (S b)
+--foo = Refl
+foo {a=Z} {b} = Refl
+foo {a=S b'} {b=Z} = Refl
+foo {a=S a'} {b=S b'} = Refl where
+    ind : S (maximum a' b) = maximum (S a') (S b)
+    ind = foo
+-}
+
+{-
+--mapAll : (P : a -> Type) -> (Q : b -> Type) -> (x : P a) -> Type -- -> All P vec -> All (Q . P) vec
+--mapAll : (P : a -> Type) -> (Q : P a -> Type) -> All P vec -> All (Q . P) vec
+mapAll : (P : a -> Type) -> (Q : Type -> Type) -> All P vec -> All (Q . P) vec
+--mapAll = ?q
+mapAll {vec=Nil} p q Nil = Nil
+mapAll {vec=z :: zs} p q (y :: ys) = ?q
+--mapAll {vec=z :: zs} p q (y :: ys) = (q (p z)) :: mapAll {vec=zs} p q ys
+--mapAll {vec=(z :: zs)} p q (y :: ys) = (q . p) z :: mapAll {vec=zs} p q ys  --(q . p) x :: mapAll p q xs
+-}

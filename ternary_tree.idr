@@ -1,3 +1,6 @@
+import Data.Vect
+import Data.Vect.Quantifiers
+
 reflToLTERefl : n = m -> LTE n m
 reflToLTERefl Refl = lteRefl
 
@@ -104,16 +107,111 @@ aPlusBMinusAIsB (S x) Z {smaller} = absurd (succNotLTEzero smaller)
 aPlusBMinusAIsB Z (S y) = Refl
 aPlusBMinusAIsB (S x) (S y) {smaller} = cong (aPlusBMinusAIsB x y {smaller=fromLteSucc smaller})
 
+lteMaximum : (LTE a (maximum a b), LTE b (maximum a b))
+lteMaximum {a=Z} {b} = (LTEZero, lteRefl)
+lteMaximum {a=S a'} {b=Z} = (lteRefl, LTEZero)
+lteMaximum {a=S a'} {b=S b'} = (LTESucc (fst ind), LTESucc (snd ind)) where
+    ind : (LTE a' (maximum a' b'), LTE b' (maximum a' b'))
+    ind = lteMaximum
+
+mapAll : {P, Q : a -> Type} -> (f : (x : a) -> P x -> Q x) -> All P xs -> All Q xs
+mapAll _ Nil = Nil
+mapAll {xs=i :: is} f (j :: js) = f i j :: mapAll f js
+
+Maximum : Nat -> Nat -> Nat
+Maximum = maximum -- hack around implicit capture
+
+{-
+maximumVecBound : (vec : Vect (S n) Nat) -> All (\e => LTE e (foldr1 Maximum vec)) vec
+maximumVecBound (x :: []) = [lteRefl]
+maximumVecBound {n=S m} (x :: xs) = step where
+    maxElt : Nat
+    maxElt = foldr1 maximum xs
+    ind : All (\e => LTE e maxElt) xs
+    ind = maximumVecBound xs
+    p1 : (LTE x (maximum x maxElt), LTE maxElt (maximum x maxElt))
+    p1 = lteMaximum
+    --p2 : Maximum x (foldr Maximum Z xs) = foldr Maximum Z (x :: xs)
+    --p2 = Refl
+    step : All (\e => LTE e (foldr Maximum x xs)) (x :: xs)
+    step = ?z
+    --step = fst p1 :: mapAll {P=(\e => LTE e maxElt)} {Q=(\e => LTE e (maximum x maxElt))} (\e, lte => lte `lteTransitive` snd p1)
+
+sumBoundedByKMax : (x : Vect (S n) Nat) -> LTE (sum x) (S n * foldl1 max x)
+sumBoundedByKMax = ?a
+-}
+
+addLTE : LTE a b -> LTE x y -> LTE (a + x) (b + y)
+addLTE {a} {b} {x} {y} ab xy = left `lteTransitive` right where
+    left : LTE (a + x) (b + x)
+    left = rewrite plusCommutative a x in rewrite plusCommutative b x in plusMonotonic x ab
+    right : LTE (b + x) (b + y)
+    right = plusMonotonic b xy
+
+sumBoundedBy3Max : (a + b + c) `LTE` 3 * ((a `maximum` b) `maximum` c)
+sumBoundedBy3Max {a} {b} {c} = s where
+    x : Nat
+    x = (a `maximum` b) `maximum` c
+    p1 : (LTE a (maximum a b), LTE b (maximum a b))
+    p1 = lteMaximum
+    p2 : (LTE (maximum a b) x, LTE c x)
+    p2 = lteMaximum
+    la : LTE a x
+    la = fst p1 `lteTransitive` fst p2
+    lb : LTE b x
+    lb = snd p1 `lteTransitive` fst p2
+    lc : LTE c x
+    lc = snd p2
+    q : LTE (a+b+c) (x+x+x)
+    q = addLTE (addLTE la lb) lc
+    r1 : x + x = 2 * x
+    r1 = rewrite plusZeroRightNeutral x in Refl
+    r2 : x + (x + x) = 3 * x
+    r2 = rewrite plusZeroRightNeutral x in rewrite r1 in Refl
+    r3 : x + x + x = 3 * x
+    r3 = rewrite sym $ plusAssociative x x x in r2
+    s : LTE (a+b+c) (3*x)
+    s = rewrite sym r3 in q
+
 data Tern = Root | Branch Tern Tern Tern
 
+data CompleteTree : (n : Nat) -> Type where
+    CRoot : CompleteTree (S n)
+    CBranch : Vect (S n) (CompleteTree (S n)) -> CompleteTree (S n)
+
+total
 height : Tern -> Nat
 height Root = 0
-height (Branch t1 t2 t3) = foldl1 max (map height [t1, t2, t3]) + 1
+height (Branch t1 t2 t3) = (height t1 `max` height t2) `max` height t3 + 1
 
+{-
+total
+height' : CompleteTree n -> Nat
+height' CRoot = 0
+height' (CBranch subtrees) = Data.Vect.foldl1 max (map height' subtrees)
+-}
+
+total
 nodes : Tern -> Nat
 nodes Root = 1
-nodes (Branch t1 t2 t3) = sum (map nodes [t1, t2, t3]) + 1
+nodes (Branch t1 t2 t3) = nodes t1 + nodes t2 + nodes t3 + 1
 
-height_bound : (t : Tern) -> LTE (nodes t) ((-) (power 3 (S (height t))) 1 {smaller=nonzeroPowerGTE1})
-height_bound Root = ?x
-height_bound (Branch t1 t2 t3) = ?y
+height_bound : (t : Tern) -> LTE (nodes t) ((-) (power 3 (S (height t))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t))})
+height_bound Root = lteAddRight 1
+height_bound (Branch t1 t2 t3) = ?y where
+    r1 : Nat
+    r2 : Nat
+    r3 : Nat
+    r1 = ((-) (power 3 (S (height t1))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t1))})
+    r2 = ((-) (power 3 (S (height t2))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t2))})
+    r3 = ((-) (power 3 (S (height t3))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t3))})
+    ind1 : LTE (nodes t1) r1
+    ind1 = height_bound t1
+    ind2 : LTE (nodes t2) r2
+    ind2 = height_bound t2
+    ind3 : LTE (nodes t3) r3
+    ind3 = height_bound t3
+    p1 : LTE (nodes t1 + nodes t2 + nodes t3) (r1 + r2 + r3)
+    p1 = addLTE ind1 ind2 `addLTE` ind3
+    p2 : LTE (r1 + r2 + r3) (3 * (maximum r1 r2 `maximum` r3))
+    p2 = sumBoundedBy3Max
