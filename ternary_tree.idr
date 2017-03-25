@@ -26,8 +26,11 @@ succMonotonic : LTE n m -> LTE (S n) (S m)
 succMonotonic = LTESucc
 
 plusMonotonic : (k : Nat) -> LTE n m -> LTE (k + n) (k + m)
-plusMonotonic {n} {m} Z lte = lte
-plusMonotonic {n} {m} (S x) lte = LTESucc (plusMonotonic x lte)
+plusMonotonic Z lte = lte
+plusMonotonic (S x) lte = LTESucc (plusMonotonic x lte)
+
+plusMonotonicRight : (k : Nat) -> LTE n m -> LTE (n + k) (m + k)
+plusMonotonicRight {n} {m} k lte = rewrite plusCommutative n k in rewrite plusCommutative m k in plusMonotonic k lte
 
 predMonotonic : LTE n m -> LTE (pred n) (pred m)
 predMonotonic LTEZero = LTEZero
@@ -234,33 +237,55 @@ sumBoundedBy3Max {a} {b} {c} = s where
     s : LTE (a+b+c) (3*x)
     s = rewrite sym r3 in q
 
+checkLTE : (n : Nat) -> (m : Nat) -> Either (LTE n m) (LTE m n)
+checkLTE Z m = Left LTEZero
+checkLTE n Z = Right LTEZero
+checkLTE (S n) (S m) = case checkLTE n m of
+    Left x => Left (LTESucc x)
+    Right x => Right (LTESucc x)
+
+lteToEq : LTE a b -> LTE b a -> a = b
+lteToEq LTEZero LTEZero = Refl
+lteToEq (LTESucc x) (LTESucc y) = cong (lteToEq x y)
+
+eqToLTE : a = b -> (LTE a b, LTE b a)
+eqToLTE Refl = (lteRefl, lteRefl)
+
 monotonicImpliesMaxHomomorphic : {f : Nat -> Nat} -> ({n, m : Nat} -> LTE n m -> LTE (f n) (f m)) -> maximum (f a) (f b) = f (maximum a b)
-monotonicImpliesMaxHomomorphic {a=Z} {b} {f} mono = maximumLTE (the (LTE (f 0) (f b)) (mono LTEZero))
-monotonicImpliesMaxHomomorphic {a=S a'} {b=Z} {f} mono = ?maxHom1 where
-    lteA : LTE Z a
-    lteA = LTEZero
-    --p2 : maximum (f a') (f Z) = f (maximum a' Z)
-    --p2 = monotonicImpliesMaxHomomorphic p3
-    {-
-    p1 : maximum (f a) (f 0) = f (maximum a 0)
-    p1 = 
-    --rewrite maximumCommutative a Z in 
-        rewrite maximumZeroNLeft a in 
-        rewrite maximumCommutative (f a) (f Z) in monotonicImpliesMaxHomomorphic mono
-    -}
-monotonicImpliesMaxHomomorphic {a=S a'} {b=S b'} {f} mono = ?maxHom2 where
-    mono' : {x, y : Nat} -> (LTE x y) -> (LTE (f (S x)) (f (S y)))
-    mono' lte = mono (LTESucc lte)
+monotonicImpliesMaxHomomorphic {a=Z} {b} {f} mono = maximumLTE (mono LTEZero)
+monotonicImpliesMaxHomomorphic {a=S a'} {b=Z} {f} mono = rewrite maximumCommutative (f (S a')) (f 0) in maximumLTE (mono LTEZero)
+monotonicImpliesMaxHomomorphic {a=S a'} {b=S b'} {f} mono = goal where
     ind : maximum (f a') (f b') = f (maximum a' b')
     ind = monotonicImpliesMaxHomomorphic mono
-    --ind' : maximum (f a') (f b') = f (S (maximum a' b'))
-    --ind' = monotonicImpliesMaxHomomorphic mono'
-    p1 : {x, y : Nat} -> LTE x y -> LTE (S (f x)) (S (f y))
-    p1 = composeMonotonic LTESucc mono
-    p2 : {x, y : Nat} -> LTE x y -> LTE (f (S x)) (f (S y))
-    p2 = composeMonotonic mono LTESucc
-    --ind : maximum (f a) (f b') = f (maximum a' (S b'))
-    --ind = monotonicImpliesMaxHomomorphic {f=f} mono'
+    --indL : maximum (f a') (f b') `LTE` f (maximum a' b')
+    --indR : f (maximum a' b') `LTE` maximum (f a') (f b')
+    --indL = reflToLTERefl ind
+    --indR = reflToLTERefl (sym ind)
+    p1 : (LTE a' (maximum a' b'), LTE b' (maximum a' b'))
+    p1 = lteMaximum
+    p2 : (LTE (f a') (f (maximum a' b')), LTE (f b') (f (maximum a' b')))
+    p2 = (mono (fst p1), mono (snd p1))
+    p3a : maximum (f a') (f (maximum a' b')) = (f (maximum a' b'))
+    p3a = maximumLTE (fst p2)
+    p4 : f x `LTE` f (S x)
+    p4 = mono (lteSuccRight lteRefl)
+    p4' : maximum (f x) (f (S x)) = f (S x)
+    p4' = maximumLTE p4
+    p5 : Either (maximum x y = y) (maximum y x = x)
+    p5 {x} {y} = case checkLTE x y of
+        Left lte => Left (maximumLTE lte)
+        Right lte => Right (maximumLTE lte)
+    q1 : f (maximum (S a') (S b')) = f (S (maximum a' b'))
+    q1 = cong (maximumSuccSucc a' b')
+    q2 : (f (maximum (S a') (S b')) `LTE` f (S (maximum a' b')), f (S (maximum a' b')) `LTE` f (maximum (S a') (S b')))
+    q2 = eqToLTE q1
+    --q2 : Either (f (maximum (S a') (S b')) = f (S (maximum a' a'))) (f (maximum (S a') (S b')) = f (S (maximum b' b')))
+    goalL : maximum (f (S a')) (f (S b')) `LTE` f (S (maximum a' b'))
+    goalL = ?goalL
+    goalR : f (S (maximum a' b')) `LTE` maximum (f (S a')) (f (S b'))
+    goalR = ?goalR
+    goal : maximum (f (S a')) (f (S b')) = f (S (maximum a' b'))
+    goal = lteToEq goalL goalR
 
 data Tern = Root | Branch Tern Tern Tern
 
@@ -270,18 +295,31 @@ data CompleteTree : (n : Nat) -> Type where
 
 height : Tern -> Nat
 height Root = 0
-height (Branch t1 t2 t3) = (height t1 `max` height t2) `max` height t3 + 1
+height (Branch t1 t2 t3) = S ((height t1 `maximum` height t2) `maximum` height t3)
 
 {-
-total
 height' : CompleteTree n -> Nat
 height' CRoot = 0
-height' (CBranch subtrees) = Data.Vect.foldl1 max (map height' subtrees)
+--height' (CBranch subtrees) = Data.Vect.foldl1 max (map height' subtrees)
+height' (CBranch subtrees) = foldr (\subtree, acc => max acc (height' subtree)) Z subtrees
 -}
 
 nodes : Tern -> Nat
 nodes Root = 1
-nodes (Branch t1 t2 t3) = nodes t1 + nodes t2 + nodes t3 + 1
+nodes (Branch t1 t2 t3) = S (nodes t1 + nodes t2 + nodes t3)
+
+minusOnePred : (a `minus` 1) = pred a
+minusOnePred {a=Z} = Refl
+minusOnePred {a=S a'} = minusZeroRight a'
+
+ltePredRight : (a `minus` S b) `LTE` (a `minus` b)
+ltePredRight {a=Z} = LTEZero
+ltePredRight {a=S a'} {b=Z} = rewrite minusZeroRight a' in lteSuccRight lteRefl
+ltePredRight {a=S a'} {b=S b'} = ltePredRight {a=a'} {b=b'}
+
+lteMinusRight : LTE (a `minus` k) (a `minus` 0)
+lteMinusRight {k=Z} = lteRefl
+lteMinusRight {a} {k=S k'} = ltePredRight `lteTransitive` lteMinusRight 
 
 height_bound : (t : Tern) -> LTE (nodes t) ((-) (power 3 (S (height t))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t))})
 height_bound Root = lteAddRight 1
@@ -324,3 +362,14 @@ height_bound (Branch t1 t2 t3) = ?y where
     p5 = rewrite sym $ multDistributesOverMinusRight 3 (power 3 (S (maximum (height t1) (height t2) `maximum` height t3))) 1 in p4
     p6 : LTE (r1 + r2 + r3) (power 3 (S (S maxHeight)) `minus` 3)
     p6 = p5
+    p7 : LTE (nodes (Branch t1 t2 t3)) (S (power 3 (S (S maxHeight)) `minus` 3))
+    p7 = LTESucc (p1 `lteTransitive` p6)
+    --loosenBound : (S (power 3 (S (S maxHeight)) `minus` 3)) = ((power 3 (S (S maxHeight)) `minus` 2))
+    --loosenBound = rewrite predSucc (power 3 (S (S maxHeight)) `minus` 2) in
+    loosenBound : (power 3 (S (S maxHeight)) `minus` 3) = (pred (power 3 (S (S maxHeight)) `minus` 2))
+    loosenBound = minusSuccPred (power 3 (S (S maxHeight))) 2
+    loosenBound' : S (power 3 (S (S maxHeight)) `minus` 3) = S (pred (power 3 (S (S maxHeight)) `minus` 2))
+    loosenBound' = cong loosenBound
+    --loosenBound'' : S (power 3 (S (S maxHeight)) `minus` 3) = power 3 (S (S maxHeight)) `minus` 2
+    --loosenBound'' = rewrite foo (nonzeroPowerGTE1 2 (S (S maxHeight))) in loosenBound'
+    --loosenBound'' = loosenBound'
