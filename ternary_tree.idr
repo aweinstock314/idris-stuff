@@ -244,48 +244,17 @@ checkLTE (S n) (S m) = case checkLTE n m of
     Left x => Left (LTESucc x)
     Right x => Right (LTESucc x)
 
-lteToEq : LTE a b -> LTE b a -> a = b
-lteToEq LTEZero LTEZero = Refl
-lteToEq (LTESucc x) (LTESucc y) = cong (lteToEq x y)
-
-eqToLTE : a = b -> (LTE a b, LTE b a)
-eqToLTE Refl = (lteRefl, lteRefl)
+monotonicImpliesMaxHomomorphicLemma : {f : Nat -> Nat} -> ({n, m : Nat} -> LTE n m -> LTE (f n) (f m)) -> LTE a b -> maximum (f a) (f b) = f (maximum a b)
+monotonicImpliesMaxHomomorphicLemma {f} mono {a} {b} lte_ab = rewrite left in right where
+    left : maximum (f a) (f b) = f b
+    left = maximumLTE (mono lte_ab)
+    right : f b = f (maximum a b)
+    right = rewrite maximumLTE lte_ab in Refl
 
 monotonicImpliesMaxHomomorphic : {f : Nat -> Nat} -> ({n, m : Nat} -> LTE n m -> LTE (f n) (f m)) -> maximum (f a) (f b) = f (maximum a b)
-monotonicImpliesMaxHomomorphic {a=Z} {b} {f} mono = maximumLTE (mono LTEZero)
-monotonicImpliesMaxHomomorphic {a=S a'} {b=Z} {f} mono = rewrite maximumCommutative (f (S a')) (f 0) in maximumLTE (mono LTEZero)
-monotonicImpliesMaxHomomorphic {a=S a'} {b=S b'} {f} mono = goal where
-    ind : maximum (f a') (f b') = f (maximum a' b')
-    ind = monotonicImpliesMaxHomomorphic mono
-    --indL : maximum (f a') (f b') `LTE` f (maximum a' b')
-    --indR : f (maximum a' b') `LTE` maximum (f a') (f b')
-    --indL = reflToLTERefl ind
-    --indR = reflToLTERefl (sym ind)
-    p1 : (LTE a' (maximum a' b'), LTE b' (maximum a' b'))
-    p1 = lteMaximum
-    p2 : (LTE (f a') (f (maximum a' b')), LTE (f b') (f (maximum a' b')))
-    p2 = (mono (fst p1), mono (snd p1))
-    p3a : maximum (f a') (f (maximum a' b')) = (f (maximum a' b'))
-    p3a = maximumLTE (fst p2)
-    p4 : f x `LTE` f (S x)
-    p4 = mono (lteSuccRight lteRefl)
-    p4' : maximum (f x) (f (S x)) = f (S x)
-    p4' = maximumLTE p4
-    p5 : Either (maximum x y = y) (maximum y x = x)
-    p5 {x} {y} = case checkLTE x y of
-        Left lte => Left (maximumLTE lte)
-        Right lte => Right (maximumLTE lte)
-    q1 : f (maximum (S a') (S b')) = f (S (maximum a' b'))
-    q1 = cong (maximumSuccSucc a' b')
-    q2 : (f (maximum (S a') (S b')) `LTE` f (S (maximum a' b')), f (S (maximum a' b')) `LTE` f (maximum (S a') (S b')))
-    q2 = eqToLTE q1
-    --q2 : Either (f (maximum (S a') (S b')) = f (S (maximum a' a'))) (f (maximum (S a') (S b')) = f (S (maximum b' b')))
-    goalL : maximum (f (S a')) (f (S b')) `LTE` f (S (maximum a' b'))
-    goalL = ?goalL
-    goalR : f (S (maximum a' b')) `LTE` maximum (f (S a')) (f (S b'))
-    goalR = ?goalR
-    goal : maximum (f (S a')) (f (S b')) = f (S (maximum a' b'))
-    goal = lteToEq goalL goalR
+monotonicImpliesMaxHomomorphic {f} {a} {b} mono = case checkLTE a b of
+    Left lte_ab => monotonicImpliesMaxHomomorphicLemma mono lte_ab
+    Right lte_ba => rewrite maximumCommutative (f a) (f b) in rewrite maximumCommutative a b in monotonicImpliesMaxHomomorphicLemma mono lte_ba
 
 data Tern = Root | Branch Tern Tern Tern
 
