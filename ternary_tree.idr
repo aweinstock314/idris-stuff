@@ -158,7 +158,6 @@ powerMonotonicBase {n} {m} (S x) lte = left `lteTransitive` right where
 nonzeroPowerGTE1 : (n : Nat) -> (m : Nat) -> LTE 1 (power (S n) m)
 nonzeroPowerGTE1 Z y = reflToLTERefl . sym $ powerOneSuccOne y
 nonzeroPowerGTE1 (S x) Z = lteRefl
---nonzeroPowerGTE1 (S x) (S y) = oneLTENonzero `lteTransitive` nonzeroPowerGTE1 x y
 nonzeroPowerGTE1 (S x) (S y) = (ind `lteTransitive` ind') `lteTransitive` ind'' where
     ind : LTE 1 (power (S x) y)
     ind = nonzeroPowerGTE1 x y
@@ -170,12 +169,15 @@ nonzeroPowerGTE1 (S x) (S y) = (ind `lteTransitive` ind') `lteTransitive` ind'' 
     ind'' = powerMonotonicBase y p1
 
 nonzeroPowerGTEBase : LTE b (power b (S n))
-nonzeroPowerGTEBase {b=Z} = LTEZero
-nonzeroPowerGTEBase {b=S b'} {n} = ?x where
-    ind : LTE b' (power b' (S n))
-    ind = nonzeroPowerGTEBase {b=b'}
-    --p1 : LTE (power (S b') n) ((power (S b') n) + (mult b' (power (S b') n)))
-    --p1 = lteAddRight (mult b' (power (S b') n))
+nonzeroPowerGTEBase {b} {n=Z} = rewrite multOneRightNeutral b in lteRefl
+nonzeroPowerGTEBase {b=Z} {n} = lteRefl
+nonzeroPowerGTEBase {b=S b'} {n=S n'} = ind `lteTransitive` step where
+    b : Nat
+    b = S b'
+    ind : LTE b (b `mult` power b n')
+    ind = nonzeroPowerGTEBase {n=n'}
+    step : LTE (b `mult` power b n') (b `mult` (b `mult` power b n'))
+    step = lteMultRight b' (lteRefl {n=b `mult` power b n'})
 
 powerMonotonicExp : (i : Nat) -> (j : Nat) -> (b : Nat) -> LTE i j -> LTE (power (S b) i) (power (S b) j)
 powerMonotonicExp Z Z b lte = lteRefl
@@ -314,27 +316,27 @@ nodes : Tern -> Nat
 nodes Root = 1
 nodes (Branch t1 t2 t3) = S (nodes t1 + nodes t2 + nodes t3)
 
+hb_f : Nat -> Nat
+hb_f h = (-) (power 3 (S h)) 1 {smaller=nonzeroPowerGTE1 2 (S h)}
+--hb_f = (\x => x `minus` 1) . (\x => power 3 x) . S
 
-height_bound : (t : Tern) -> LTE (nodes t) ((-) (power 3 (S (height t))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t))})
+mono_hb_f : LTE n m -> LTE (hb_f n) (hb_f m)
+mono_hb_f = composeMonotonic (minusMonotonicLeft 1) (powerMonotonicExp' 2) `composeMonotonic` LTESucc
+
+height_bound : (t : Tern) -> LTE (nodes t) (hb_f (height t))
 height_bound Root = lteAddRight 1
 height_bound (Branch t1 t2 t3) = goal where
-    f : Nat -> Nat
-    f h = (-) (power 3 (S h)) 1 {smaller=nonzeroPowerGTE1 2 (S h)}
-    --g : Nat -> Nat
-    --g = (\x => x `minus` 1) . (\x => power 3 x) . S
-    monof : {n, m : Nat} -> LTE n m -> LTE (f n) (f m)
-    monof = composeMonotonic (minusMonotonicLeft 1) (powerMonotonicExp' 2) `composeMonotonic` LTESucc
     r1 : Nat
     r2 : Nat
     r3 : Nat
-    r1 = f (height t1)
-    r2 = f (height t2)
-    r3 = f (height t3)
-    s1 : maximum r1 r2 = f (maximum (height t1) (height t2))
-    s1 = monotonicImpliesMaxHomomorphic monof
-    s2 : f (maximum (height t1) (height t2)) `maximum` r3 = f (maximum (height t1) (height t2) `maximum` (height t3))
-    s2 = monotonicImpliesMaxHomomorphic monof
-    s3 : maximum r1 r2 `maximum` r3 = f (maximum (height t1) (height t2) `maximum` height t3)
+    r1 = hb_f (height t1)
+    r2 = hb_f (height t2)
+    r3 = hb_f (height t3)
+    s1 : maximum r1 r2 = hb_f (maximum (height t1) (height t2))
+    s1 = monotonicImpliesMaxHomomorphic mono_hb_f
+    s2 : hb_f (maximum (height t1) (height t2)) `maximum` r3 = hb_f (maximum (height t1) (height t2) `maximum` (height t3))
+    s2 = monotonicImpliesMaxHomomorphic mono_hb_f
+    s3 : maximum r1 r2 `maximum` r3 = hb_f (maximum (height t1) (height t2) `maximum` height t3)
     s3 = rewrite s1 in s2
     ind1 : LTE (nodes t1) r1
     ind1 = height_bound t1
@@ -348,7 +350,7 @@ height_bound (Branch t1 t2 t3) = goal where
     p1 = addLTE ind1 ind2 `addLTE` ind3
     p2 : LTE (r1 + r2 + r3) (3 * (maximum r1 r2 `maximum` r3))
     p2 = sumBoundedBy3Max
-    p3 : LTE (r1 + r2 + r3) (3 * f maxHeight)
+    p3 : LTE (r1 + r2 + r3) (3 * hb_f maxHeight)
     p3 = rewrite sym s3 in p2
     p4 : LTE (r1 + r2 + r3) (3 * ((power 3 (S maxHeight)) `minus` 1))
     p4 = p3
@@ -362,18 +364,9 @@ height_bound (Branch t1 t2 t3) = goal where
     q1 = succMinusInnerLeft {smaller=nonzeroPowerGTEBase}
     q2 : (S (power 3 (S (height (Branch t1 t2 t3))) `minus` 3)) = power 3 (S (height (Branch t1 t2 t3))) `minus` 2
     q2 = q1
-    --loosenBound : (S (power 3 (S (S maxHeight)) `minus` 3)) = ((power 3 (S (S maxHeight)) `minus` 2))
-    --loosenBound = rewrite predSucc (power 3 (S (S maxHeight)) `minus` 2) in
-    loosenBound : (power 3 (S (S maxHeight)) `minus` 3) = (pred (power 3 (S (S maxHeight)) `minus` 2))
-    loosenBound = minusSuccPred (power 3 (S (S maxHeight))) 2
-    loosenBound' : S (power 3 (S (S maxHeight)) `minus` 3) = S (pred (power 3 (S (S maxHeight)) `minus` 2))
-    loosenBound' = cong loosenBound
-    --loosenBound'' : S (power 3 (S (S maxHeight)) `minus` 3) = power 3 (S (S maxHeight)) `minus` 2
-    --loosenBound'' = rewrite foo (nonzeroPowerGTE1 2 (S (S maxHeight))) in loosenBound'
-    --loosenBound'' = loosenBound'
     looser : LTE (power 3 (S (height (Branch t1 t2 t3))) `minus` 2) (power 3 (S (height (Branch t1 t2 t3))) `minus` 1)
     looser = minusMonotonicRight (power 3 (S (height (Branch t1 t2 t3)))) (the (LTE 1 2) (LTESucc LTEZero))
     tightGoal : LTE (nodes (Branch t1 t2 t3)) (power 3 (S (height (Branch t1 t2 t3))) `minus` 2)
     tightGoal = rewrite sym q2 in p7
-    goal : LTE (nodes (Branch t1 t2 t3)) (f (height (Branch t1 t2 t3)))
+    goal : LTE (nodes (Branch t1 t2 t3)) (hb_f (height (Branch t1 t2 t3)))
     goal = tightGoal `lteTransitive` looser
