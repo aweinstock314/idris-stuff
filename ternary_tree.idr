@@ -36,15 +36,15 @@ predMonotonic : LTE n m -> LTE (pred n) (pred m)
 predMonotonic LTEZero = LTEZero
 predMonotonic (LTESucc lte) = lte
 
-minusMonotonic : (k : Nat) -> (l1 : LTE k n) -> (l2 : LTE n m) -> LTE (n - k) ((-) m k {smaller=l1 `lteTransitive` l2})
-minusMonotonic {n} {m} Z l1 l2 = rewrite minusZeroRight n in rewrite minusZeroRight m in l2
-minusMonotonic {n} {m} (S k') l1 l2 = ind'' where
+minusMonotonicLeftInfix : (k : Nat) -> (l1 : LTE k n) -> (l2 : LTE n m) -> LTE (n - k) ((-) m k {smaller=l1 `lteTransitive` l2})
+minusMonotonicLeftInfix {n} {m} Z l1 l2 = rewrite minusZeroRight n in rewrite minusZeroRight m in l2
+minusMonotonicLeftInfix {n} {m} (S k') l1 l2 = ind'' where
     tmp : LTE k' (S k')
     tmp = lteSuccRight lteRefl
     tmp2 : LTE k' n
     tmp2 = tmp `lteTransitive` l1
     ind : LTE ((-) n k' {smaller=tmp2}) ((-) m k' {smaller=tmp2 `lteTransitive` l2})
-    ind = minusMonotonic k' tmp2 l2
+    ind = minusMonotonicLeftInfix k' tmp2 l2
     p1 : ((-) n (S k') {smaller=l1}) = Prelude.Nat.pred ((-) n k' {smaller=tmp2})
     p1 = rewrite minusSuccPred n k' in Refl
     p2 : ((-) m (S k') {smaller=l1 `lteTransitive` l2}) = Prelude.Nat.pred ((-) m k' {smaller=tmp2 `lteTransitive` l2})
@@ -54,11 +54,11 @@ minusMonotonic {n} {m} (S k') l1 l2 = ind'' where
     ind'' : LTE ((-) n (S k') {smaller=l1}) ((-) m (S k') {smaller=l1 `lteTransitive` l2})
     ind'' = rewrite p1 in rewrite p2 in ind'
 
-minusMonotonic' : (k : Nat) -> {n,m : Nat} -> LTE n m -> LTE (n `minus` k) (m `minus` k)
-minusMonotonic' {n} {m} Z l2 = rewrite minusZeroRight n in rewrite minusZeroRight m in l2
-minusMonotonic' {n} {m} (S k') l2 = ind'' where
+minusMonotonicLeft : (k : Nat) -> {n,m : Nat} -> LTE n m -> LTE (n `minus` k) (m `minus` k)
+minusMonotonicLeft {n} {m} Z l2 = rewrite minusZeroRight n in rewrite minusZeroRight m in l2
+minusMonotonicLeft {n} {m} (S k') l2 = ind'' where
     ind : LTE (minus n k') (minus m k')
-    ind = minusMonotonic' k' l2
+    ind = minusMonotonicLeft k' l2
     p1 : (minus n (S k')) = Prelude.Nat.pred (minus n k')
     p1 = rewrite minusSuccPred n k' in Refl
     p2 : (minus m (S k')) = Prelude.Nat.pred (minus m k')
@@ -67,6 +67,35 @@ minusMonotonic' {n} {m} (S k') l2 = ind'' where
     ind' = predMonotonic ind
     ind'' : LTE (minus n (S k')) (minus m (S k'))
     ind'' = rewrite p1 in rewrite p2 in ind'
+
+minusOnePred : (a `minus` 1) = pred a
+minusOnePred {a=Z} = Refl
+minusOnePred {a=S a'} = minusZeroRight a'
+
+ltePredRight : (a `minus` S b) `LTE` (a `minus` b)
+ltePredRight {a=Z} = LTEZero
+ltePredRight {a=S a'} {b=Z} = rewrite minusZeroRight a' in lteSuccRight lteRefl
+ltePredRight {a=S a'} {b=S b'} = ltePredRight {a=a'} {b=b'}
+
+lteMinusZeroRight : LTE (a `minus` k) (a `minus` 0)
+lteMinusZeroRight {k=Z} = lteRefl
+lteMinusZeroRight {a} {k=S k'} = ltePredRight `lteTransitive` lteMinusZeroRight 
+
+minusMonotonicRight : (k : Nat) -> LTE n m -> LTE (k `minus` m) (k `minus` n)
+minusMonotonicRight _ LTEZero = lteMinusZeroRight
+minusMonotonicRight {n=S n'} {m=S m'} k (LTESucc lte) = goal where
+    ind : LTE (k `minus` m') (k `minus` n')
+    ind = minusMonotonicRight k lte
+    tmp : LTE (pred (k `minus` m')) (pred (k `minus` n'))
+    tmp = predMonotonic ind
+    goal : LTE (k `minus` S m') (k `minus` S n')
+    goal = rewrite minusSuccPred k n' in rewrite minusSuccPred k m' in tmp
+
+succMinusInnerLeft : {smaller : LTE b a} -> S (a `minus` b) = S a `minus` b
+succMinusInnerLeft {a=Z} {b=Z} = Refl
+succMinusInnerLeft {a=S a'} {b=Z} = Refl
+succMinusInnerLeft {a=Z} {b=S b'} {smaller} = absurd (succNotLTEzero smaller)
+succMinusInnerLeft {a=S a'} {b=S b'} {smaller=LTESucc lte} = succMinusInnerLeft {a=a'} {b=b'} {smaller=lte}
 
 composeMonotonic : {f : Nat -> Nat} -> {g : Nat -> Nat} -> ({a, b : Nat} -> LTE a b -> LTE (f a) (f b)) -> ({n, m : Nat} -> LTE n m -> LTE (g n) (g m)) -> ({x, y : Nat} -> LTE x y -> LTE (f (g x)) (f (g y)))
 composeMonotonic {f} {g} monof monog = monoh where
@@ -139,6 +168,14 @@ nonzeroPowerGTE1 (S x) (S y) = (ind `lteTransitive` ind') `lteTransitive` ind'' 
     ind' = lteMultRight x lteRefl
     ind'' : LTE (power (S x) (S y)) (power (S (S x)) (S y))
     ind'' = powerMonotonicBase y p1
+
+nonzeroPowerGTEBase : LTE b (power b (S n))
+nonzeroPowerGTEBase {b=Z} = LTEZero
+nonzeroPowerGTEBase {b=S b'} {n} = ?x where
+    ind : LTE b' (power b' (S n))
+    ind = nonzeroPowerGTEBase {b=b'}
+    --p1 : LTE (power (S b') n) ((power (S b') n) + (mult b' (power (S b') n)))
+    --p1 = lteAddRight (mult b' (power (S b') n))
 
 powerMonotonicExp : (i : Nat) -> (j : Nat) -> (b : Nat) -> LTE i j -> LTE (power (S b) i) (power (S b) j)
 powerMonotonicExp Z Z b lte = lteRefl
@@ -277,28 +314,16 @@ nodes : Tern -> Nat
 nodes Root = 1
 nodes (Branch t1 t2 t3) = S (nodes t1 + nodes t2 + nodes t3)
 
-minusOnePred : (a `minus` 1) = pred a
-minusOnePred {a=Z} = Refl
-minusOnePred {a=S a'} = minusZeroRight a'
-
-ltePredRight : (a `minus` S b) `LTE` (a `minus` b)
-ltePredRight {a=Z} = LTEZero
-ltePredRight {a=S a'} {b=Z} = rewrite minusZeroRight a' in lteSuccRight lteRefl
-ltePredRight {a=S a'} {b=S b'} = ltePredRight {a=a'} {b=b'}
-
-lteMinusRight : LTE (a `minus` k) (a `minus` 0)
-lteMinusRight {k=Z} = lteRefl
-lteMinusRight {a} {k=S k'} = ltePredRight `lteTransitive` lteMinusRight 
 
 height_bound : (t : Tern) -> LTE (nodes t) ((-) (power 3 (S (height t))) 1 {smaller=nonzeroPowerGTE1 2 (S (height t))})
 height_bound Root = lteAddRight 1
-height_bound (Branch t1 t2 t3) = ?y where
+height_bound (Branch t1 t2 t3) = goal where
     f : Nat -> Nat
     f h = (-) (power 3 (S h)) 1 {smaller=nonzeroPowerGTE1 2 (S h)}
     --g : Nat -> Nat
     --g = (\x => x `minus` 1) . (\x => power 3 x) . S
     monof : {n, m : Nat} -> LTE n m -> LTE (f n) (f m)
-    monof = composeMonotonic (minusMonotonic' 1) (powerMonotonicExp' 2) `composeMonotonic` LTESucc
+    monof = composeMonotonic (minusMonotonicLeft 1) (powerMonotonicExp' 2) `composeMonotonic` LTESucc
     r1 : Nat
     r2 : Nat
     r3 : Nat
@@ -329,10 +354,14 @@ height_bound (Branch t1 t2 t3) = ?y where
     p4 = p3
     p5 : LTE (r1 + r2 + r3) (3 * power 3 (S maxHeight) `minus` 3)
     p5 = rewrite sym $ multDistributesOverMinusRight 3 (power 3 (S (maximum (height t1) (height t2) `maximum` height t3))) 1 in p4
-    p6 : LTE (r1 + r2 + r3) (power 3 (S (S maxHeight)) `minus` 3)
+    p6 : LTE (r1 + r2 + r3) (power 3 (S (height (Branch t1 t2 t3))) `minus` 3)
     p6 = p5
-    p7 : LTE (nodes (Branch t1 t2 t3)) (S (power 3 (S (S maxHeight)) `minus` 3))
+    p7 : LTE (nodes (Branch t1 t2 t3)) (S (power 3 (S (height (Branch t1 t2 t3))) `minus` 3))
     p7 = LTESucc (p1 `lteTransitive` p6)
+    q1 : (S (power 3 (S (height (Branch t1 t2 t3))) `minus` 3)) = S (power 3 (S (height (Branch t1 t2 t3)))) `minus` 3
+    q1 = succMinusInnerLeft {smaller=nonzeroPowerGTEBase}
+    q2 : (S (power 3 (S (height (Branch t1 t2 t3))) `minus` 3)) = power 3 (S (height (Branch t1 t2 t3))) `minus` 2
+    q2 = q1
     --loosenBound : (S (power 3 (S (S maxHeight)) `minus` 3)) = ((power 3 (S (S maxHeight)) `minus` 2))
     --loosenBound = rewrite predSucc (power 3 (S (S maxHeight)) `minus` 2) in
     loosenBound : (power 3 (S (S maxHeight)) `minus` 3) = (pred (power 3 (S (S maxHeight)) `minus` 2))
@@ -342,3 +371,9 @@ height_bound (Branch t1 t2 t3) = ?y where
     --loosenBound'' : S (power 3 (S (S maxHeight)) `minus` 3) = power 3 (S (S maxHeight)) `minus` 2
     --loosenBound'' = rewrite foo (nonzeroPowerGTE1 2 (S (S maxHeight))) in loosenBound'
     --loosenBound'' = loosenBound'
+    looser : LTE (power 3 (S (height (Branch t1 t2 t3))) `minus` 2) (power 3 (S (height (Branch t1 t2 t3))) `minus` 1)
+    looser = minusMonotonicRight (power 3 (S (height (Branch t1 t2 t3)))) (the (LTE 1 2) (LTESucc LTEZero))
+    tightGoal : LTE (nodes (Branch t1 t2 t3)) (power 3 (S (height (Branch t1 t2 t3))) `minus` 2)
+    tightGoal = rewrite sym q2 in p7
+    goal : LTE (nodes (Branch t1 t2 t3)) (f (height (Branch t1 t2 t3)))
+    goal = tightGoal `lteTransitive` looser
