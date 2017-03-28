@@ -3,6 +3,23 @@ foo : LTE a b -> LTE b c -> LTE c d -> LTE a d
 foo x y z = (x `lteTransitive` y) `lteTransitive` z
 -}
 
+oneLTENonzero : {n : Nat} -> LTE 1 (S n)
+oneLTENonzero {n=Z} = lteRefl
+oneLTENonzero {n=S m} = lteSuccRight oneLTENonzero
+
+{-
+nonzeroMultIsNonzero : (n : Nat) -> (m : Nat) -> LTE 1 (S n * S m)
+nonzeroMultIsNonzero Z Z = lteRefl
+nonzeroMultIsNonzero (S n) m = oneLTENonzero
+-}
+
+pow1n_GTE_1 : (n : Nat) -> LTE 1 (power 1 n)
+pow1n_GTE_1 n = reflToLTERefl . sym $ powerOneSuccOne n
+
+pow0n_EQ_0 : power 0 (S k) = 0
+pow0n_EQ_0 = Refl
+
+
 {-
 plusMonotonic : LTE n m -> LTE (n + k) (m + k)
 plusMonotonic {n} {m} {k=Z} lte = rewrite plusZeroRightNeutral n in rewrite plusZeroRightNeutral m in lte
@@ -122,6 +139,37 @@ monotonicImpliesMaxHomomorphic {a=S a'} {b=S b'} {f} mono = goal where
     goal = lteToEq goalL goalR
 -}
 
+minusMonotonicLeftInfix : (k : Nat) -> (l1 : LTE k n) -> (l2 : LTE n m) -> LTE (n - k) ((-) m k {smaller=l1 `lteTransitive` l2})
+minusMonotonicLeftInfix {n} {m} Z l1 l2 = rewrite minusZeroRight n in rewrite minusZeroRight m in l2
+minusMonotonicLeftInfix {n} {m} (S k') l1 l2 = ind'' where
+    tmp : LTE k' (S k')
+    tmp = lteSuccRight lteRefl
+    tmp2 : LTE k' n
+    tmp2 = tmp `lteTransitive` l1
+    ind : LTE ((-) n k' {smaller=tmp2}) ((-) m k' {smaller=tmp2 `lteTransitive` l2})
+    ind = minusMonotonicLeftInfix k' tmp2 l2
+    p1 : ((-) n (S k') {smaller=l1}) = Prelude.Nat.pred ((-) n k' {smaller=tmp2})
+    p1 = rewrite minusSuccPred n k' in Refl
+    p2 : ((-) m (S k') {smaller=l1 `lteTransitive` l2}) = Prelude.Nat.pred ((-) m k' {smaller=tmp2 `lteTransitive` l2})
+    p2 = rewrite minusSuccPred m k' in Refl
+    ind' : LTE (Prelude.Nat.pred ((-) n k' {smaller=tmp2})) (Prelude.Nat.pred ((-) m k' {smaller=tmp2 `lteTransitive` l2}))
+    ind' = predMonotonic ind
+    ind'' : LTE ((-) n (S k') {smaller=l1}) ((-) m (S k') {smaller=l1 `lteTransitive` l2})
+    ind'' = rewrite p1 in rewrite p2 in ind'
+
+minusOnePred : (a `minus` 1) = pred a
+minusOnePred {a=Z} = Refl
+minusOnePred {a=S a'} = minusZeroRight a'
+
+{-
+ltePredLeft : LTE a b -> LTE (pred a) b
+ltePredLeft = ?lte_pred_left
+
+lteToDiff : LTE a b -> (k ** b - a = k)
+lteToDiff {b} LTEZero = (b ** minusZeroRight b)
+lteToDiff {a} {b} (LTESucc lte) = case lteToDiff lte of
+    (k ** eq) => (S k ** rewrite minusSuccSucc a b in eq)
+-}
 
 lteToEq : LTE a b -> LTE b a -> a = b
 lteToEq LTEZero LTEZero = Refl
@@ -132,3 +180,57 @@ eqToLTE Refl = (lteRefl, lteRefl)
 
 monoSuccArgLTE : {f : Nat -> Nat} -> ({n, m : Nat} -> LTE n m -> LTE (f n) (f m)) -> f x `LTE` f (S x)
 monoSuccArgLTE mono = mono (lteSuccRight lteRefl)
+
+multDistributesOverSuccLeft : (n : Nat) -> (m : Nat) -> n + (mult m n) = mult n (S m)
+multDistributesOverSuccLeft n m = rewrite multCommutative n (S m) in Refl
+
+aPlusBMinusAIsB : (a : Nat) -> (b : Nat) -> {smaller : LTE a b} -> (a + (b - a)) = b
+aPlusBMinusAIsB Z Z = Refl
+aPlusBMinusAIsB (S x) Z {smaller} = absurd (succNotLTEzero smaller)
+aPlusBMinusAIsB Z (S y) = Refl
+aPlusBMinusAIsB (S x) (S y) {smaller} = cong (aPlusBMinusAIsB x y {smaller=fromLteSucc smaller})
+
+mapAll : {P, Q : a -> Type} -> (f : (x : a) -> P x -> Q x) -> All P xs -> All Q xs
+mapAll _ Nil = Nil
+mapAll {xs=i :: is} f (j :: js) = f i j :: mapAll f js
+
+Maximum : Nat -> Nat -> Nat
+Maximum = maximum -- hack around implicit capture
+
+{-
+maximumVecBound : (vec : Vect (S n) Nat) -> All (\e => LTE e (foldr1 Maximum vec)) vec
+maximumVecBound (x :: []) = [lteRefl]
+maximumVecBound {n=S m} (x :: xs) = step where
+    maxElt : Nat
+    maxElt = foldr1 maximum xs
+    ind : All (\e => LTE e maxElt) xs
+    ind = maximumVecBound xs
+    p1 : (LTE x (maximum x maxElt), LTE maxElt (maximum x maxElt))
+    p1 = lteMaximum
+    --p2 : Maximum x (foldr Maximum Z xs) = foldr Maximum Z (x :: xs)
+    --p2 = Refl
+    step : All (\e => LTE e (foldr Maximum x xs)) (x :: xs)
+    step = ?z
+    --step = fst p1 :: mapAll {P=(\e => LTE e maxElt)} {Q=(\e => LTE e (maximum x maxElt))} (\e, lte => lte `lteTransitive` snd p1)
+-}
+
+{-
+sumBoundedByKMax : (vec : Vect (S n) Nat) -> LTE (foldr (+) Z vec) (S n * foldr Maximum Z vec)
+sumBoundedByKMax (x :: []) = rewrite maximumZeroNLeft x in lteRefl
+sumBoundedByKMax {n=S m} (x :: xs) = ?sumBound where
+    p1 : LTE (foldr (+) Z xs) (S m * foldr Maximum Z xs)
+    p1 = sumBoundedByKMax xs
+    p2 : LTE (x + foldr (+) Z xs) (x + S m * foldr Maximum Z xs)
+    p2 = plusMonotonic x p1
+-}
+
+data CompleteTree : (n : Nat) -> Type where
+    CRoot : CompleteTree (S n)
+    CBranch : Vect (S n) (CompleteTree (S n)) -> CompleteTree (S n)
+
+{-
+height' : CompleteTree n -> Nat
+height' CRoot = 0
+--height' (CBranch subtrees) = Data.Vect.foldl1 max (map height' subtrees)
+height' (CBranch subtrees) = foldr (\subtree, acc => max acc (height' subtree)) Z subtrees
+-}

@@ -6,71 +6,40 @@ import Data.Vect.Quantifiers
 reflToLTERefl : n = m -> LTE n m
 reflToLTERefl Refl = lteRefl
 
-oneLTENonzero : {n : Nat} -> LTE 1 (S n)
-oneLTENonzero {n=Z} = lteRefl
-oneLTENonzero {n=S m} = lteSuccRight oneLTENonzero
+monotonicInc : (f : Nat -> Nat) -> Type
+monotonicInc f = {n : Nat} -> {m : Nat} -> LTE n m -> LTE (f n) (f m)
 
-{-
-nonzeroMultIsNonzero : (n : Nat) -> (m : Nat) -> LTE 1 (S n * S m)
-nonzeroMultIsNonzero Z Z = lteRefl
-nonzeroMultIsNonzero (S n) m = oneLTENonzero
--}
+composeMonotonic : (monotonicInc f) -> (monotonicInc g) -> (monotonicInc (f . g))
+composeMonotonic {f} {g} monof monog = monoh where
+    monoh : {x, y : Nat} -> LTE x y -> LTE (f (g x)) (f (g y))
+    monoh lte = monof (monog lte)
 
-pow1n_GTE_1 : (n : Nat) -> LTE 1 (power 1 n)
-pow1n_GTE_1 n = reflToLTERefl . sym $ powerOneSuccOne n
-
-pow0n_EQ_0 : power 0 (S k) = 0
-pow0n_EQ_0 = Refl
-
-succMonotonic : LTE n m -> LTE (S n) (S m)
-succMonotonic = LTESucc
-
-plusMonotonic : (k : Nat) -> LTE n m -> LTE (k + n) (k + m)
+plusMonotonic : (k : Nat) -> monotonicInc (\x => k + x)
 plusMonotonic Z lte = lte
 plusMonotonic (S x) lte = LTESucc (plusMonotonic x lte)
 
 plusMonotonicRight : (k : Nat) -> LTE n m -> LTE (n + k) (m + k)
 plusMonotonicRight {n} {m} k lte = rewrite plusCommutative n k in rewrite plusCommutative m k in plusMonotonic k lte
 
-predMonotonic : LTE n m -> LTE (pred n) (pred m)
+predMonotonic : monotonicInc Prelude.Nat.pred
 predMonotonic LTEZero = LTEZero
 predMonotonic (LTESucc lte) = lte
 
-minusMonotonicLeftInfix : (k : Nat) -> (l1 : LTE k n) -> (l2 : LTE n m) -> LTE (n - k) ((-) m k {smaller=l1 `lteTransitive` l2})
-minusMonotonicLeftInfix {n} {m} Z l1 l2 = rewrite minusZeroRight n in rewrite minusZeroRight m in l2
-minusMonotonicLeftInfix {n} {m} (S k') l1 l2 = ind'' where
-    tmp : LTE k' (S k')
-    tmp = lteSuccRight lteRefl
-    tmp2 : LTE k' n
-    tmp2 = tmp `lteTransitive` l1
-    ind : LTE ((-) n k' {smaller=tmp2}) ((-) m k' {smaller=tmp2 `lteTransitive` l2})
-    ind = minusMonotonicLeftInfix k' tmp2 l2
-    p1 : ((-) n (S k') {smaller=l1}) = Prelude.Nat.pred ((-) n k' {smaller=tmp2})
-    p1 = rewrite minusSuccPred n k' in Refl
-    p2 : ((-) m (S k') {smaller=l1 `lteTransitive` l2}) = Prelude.Nat.pred ((-) m k' {smaller=tmp2 `lteTransitive` l2})
-    p2 = rewrite minusSuccPred m k' in Refl
-    ind' : LTE (Prelude.Nat.pred ((-) n k' {smaller=tmp2})) (Prelude.Nat.pred ((-) m k' {smaller=tmp2 `lteTransitive` l2}))
-    ind' = predMonotonic ind
-    ind'' : LTE ((-) n (S k') {smaller=l1}) ((-) m (S k') {smaller=l1 `lteTransitive` l2})
-    ind'' = rewrite p1 in rewrite p2 in ind'
-
-minusMonotonicLeft : (k : Nat) -> {n,m : Nat} -> LTE n m -> LTE (n `minus` k) (m `minus` k)
-minusMonotonicLeft {n} {m} Z l2 = rewrite minusZeroRight n in rewrite minusZeroRight m in l2
-minusMonotonicLeft {n} {m} (S k') l2 = ind'' where
-    ind : LTE (minus n k') (minus m k')
-    ind = minusMonotonicLeft k' l2
-    p1 : (minus n (S k')) = Prelude.Nat.pred (minus n k')
-    p1 = rewrite minusSuccPred n k' in Refl
-    p2 : (minus m (S k')) = Prelude.Nat.pred (minus m k')
-    p2 = rewrite minusSuccPred m k' in Refl
-    ind' : LTE (Prelude.Nat.pred (minus n k')) (Prelude.Nat.pred (minus m k'))
-    ind' = predMonotonic ind
-    ind'' : LTE (minus n (S k')) (minus m (S k'))
-    ind'' = rewrite p1 in rewrite p2 in ind'
-
-minusOnePred : (a `minus` 1) = pred a
-minusOnePred {a=Z} = Refl
-minusOnePred {a=S a'} = minusZeroRight a'
+minusMonotonicLeft : (k : Nat) -> monotonicInc (\x => x `minus` k)
+minusMonotonicLeft k = mono k where
+    mono : (k : Nat) -> {n, m : Nat} -> LTE n m -> LTE (n `minus` k) (m `minus` k)
+    mono {n} {m} Z l2 = rewrite minusZeroRight n in rewrite minusZeroRight m in l2
+    mono {n} {m} (S k') l2 = ind'' where
+        ind : LTE (minus n k') (minus m k')
+        ind = mono k' l2
+        p1 : (minus n (S k')) = Prelude.Nat.pred (minus n k')
+        p1 = rewrite minusSuccPred n k' in Refl
+        p2 : (minus m (S k')) = Prelude.Nat.pred (minus m k')
+        p2 = rewrite minusSuccPred m k' in Refl
+        ind' : LTE (Prelude.Nat.pred (minus n k')) (Prelude.Nat.pred (minus m k'))
+        ind' = predMonotonic ind
+        ind'' : LTE (minus n (S k')) (minus m (S k'))
+        ind'' = rewrite p1 in rewrite p2 in ind'
 
 ltePredRight : (a `minus` S b) `LTE` (a `minus` b)
 ltePredRight {a=Z} = LTEZero
@@ -97,29 +66,25 @@ succMinusInnerLeft {a=S a'} {b=Z} = Refl
 succMinusInnerLeft {a=Z} {b=S b'} {smaller} = absurd (succNotLTEzero smaller)
 succMinusInnerLeft {a=S a'} {b=S b'} {smaller=LTESucc lte} = succMinusInnerLeft {a=a'} {b=b'} {smaller=lte}
 
-composeMonotonic : {f : Nat -> Nat} -> {g : Nat -> Nat} -> ({a, b : Nat} -> LTE a b -> LTE (f a) (f b)) -> ({n, m : Nat} -> LTE n m -> LTE (g n) (g m)) -> ({x, y : Nat} -> LTE x y -> LTE (f (g x)) (f (g y)))
-composeMonotonic {f} {g} monof monog = monoh where
-    monoh : {x, y : Nat} -> LTE x y -> LTE (f (g x)) (f (g y))
-    monoh lte = monof (monog lte)
-
-multMonotonicLeft : (k : Nat) -> LTE n m -> LTE (k `mult` n) (k `mult` m)
-multMonotonicLeft Z lte = LTEZero
---multMonotonicLeft {n} {m} (S x) lte = lteTransitive (plusMonotonic n (multMonotonicLeft x lte)) (rewrite plusCommutative n (x * m) in rewrite plusCommutative m (x * m) in plusMonotonic (x * m) lte)
-multMonotonicLeft {n} {m} (S x) lte = z where
-    x1 : LTE (x * n) (x * m)
-    x1 = multMonotonicLeft x lte
-    x2 : LTE (n + (x * n)) (n + (x * m))
-    x2 = plusMonotonic n x1
-    x3 : LTE ((S x) * n) (n + (x * m))
-    x3 = x2
-    y1 : LTE ((x * m) + n) ((x * m) + m)
-    y1 = plusMonotonic (x * m) lte
-    y2 : LTE (n + (x * m)) (m + (x * m))
-    y2 = rewrite plusCommutative n (x * m) in rewrite plusCommutative m (x * m) in y1
-    y3 : LTE (n + (x * m)) ((S x) * m)
-    y3 = y2
-    z : LTE ((S x) * n) ((S x) * m)
-    z = lteTransitive x3 y3
+multMonotonicLeft : (k : Nat) -> monotonicInc (\x => k * x)
+multMonotonicLeft k = mono k where
+    mono : (k : Nat) -> LTE n m -> LTE (k `mult` n) (k `mult` m)
+    mono Z lte = LTEZero
+    mono {n} {m} (S x) lte = z where
+        x1 : LTE (x * n) (x * m)
+        x1 = multMonotonicLeft x lte
+        x2 : LTE (n + (x * n)) (n + (x * m))
+        x2 = plusMonotonic n x1
+        x3 : LTE ((S x) * n) (n + (x * m))
+        x3 = x2
+        y1 : LTE ((x * m) + n) ((x * m) + m)
+        y1 = plusMonotonic (x * m) lte
+        y2 : LTE (n + (x * m)) (m + (x * m))
+        y2 = rewrite plusCommutative n (x * m) in rewrite plusCommutative m (x * m) in y1
+        y3 : LTE (n + (x * m)) ((S x) * m)
+        y3 = y2
+        z : LTE ((S x) * n) ((S x) * m)
+        z = lteTransitive x3 y3
 
 multMonotonicRight : (k : Nat) -> LTE n m -> LTE (n * k) (m * k)
 multMonotonicRight {n} {m} k lte = rewrite multCommutative n k in rewrite multCommutative m k in multMonotonicLeft k lte
@@ -134,26 +99,17 @@ lteMultRight {n} {m} (S k') lte = ind `lteTransitive` p2 where
     p2 : LTE (S k' * m) (m + (S k' * m))
     p2 = rewrite plusCommutative m (S k' * m) in p1
 
-
-{-
-ltePredLeft : LTE a b -> LTE (pred a) b
-ltePredLeft = ?lte_pred_left
-
-lteToDiff : LTE a b -> (k ** b - a = k)
-lteToDiff {b} LTEZero = (b ** minusZeroRight b)
-lteToDiff {a} {b} (LTESucc lte) = case lteToDiff lte of
-    (k ** eq) => (S k ** rewrite minusSuccSucc a b in eq)
--}
-
-powerMonotonicBase : (k : Nat) -> LTE n m -> LTE (power n (S k)) (power m (S k))
-powerMonotonicBase {n} {m} Z lte = rewrite multOneRightNeutral n in rewrite multOneRightNeutral m in lte
-powerMonotonicBase {n} {m} (S x) lte = left `lteTransitive` right where
-    ind : LTE (power n (S x)) (power m (S x))
-    ind = powerMonotonicBase x lte
-    left : LTE (power n (S (S x))) (n * power m (S x))
-    left = multMonotonicLeft n ind
-    right : LTE (n * power m (S x)) (power m (S (S x)))
-    right = multMonotonicRight (power m (S x)) lte
+powerMonotonicBase : (k : Nat) -> monotonicInc (\x => power x (S k))
+powerMonotonicBase k = mono k where
+    mono : (k : Nat) -> LTE n m -> LTE (power n (S k)) (power m (S k))
+    mono {n} {m} Z lte = rewrite multOneRightNeutral n in rewrite multOneRightNeutral m in lte
+    mono {n} {m} (S x) lte = left `lteTransitive` right where
+        ind : LTE (power n (S x)) (power m (S x))
+        ind = mono x lte
+        left : LTE (power n (S (S x))) (n * power m (S x))
+        left = multMonotonicLeft n ind
+        right : LTE (n * power m (S x)) (power m (S (S x)))
+        right = multMonotonicRight (power m (S x)) lte
 
 nonzeroPowerGTE1 : (n : Nat) -> (m : Nat) -> LTE 1 (power (S n) m)
 nonzeroPowerGTE1 Z y = reflToLTERefl . sym $ powerOneSuccOne y
@@ -179,25 +135,15 @@ nonzeroPowerGTEBase {b=S b'} {n=S n'} = ind `lteTransitive` step where
     step : LTE (b `mult` power b n') (b `mult` (b `mult` power b n'))
     step = lteMultRight b' (lteRefl {n=b `mult` power b n'})
 
-powerMonotonicExp : (i : Nat) -> (j : Nat) -> (b : Nat) -> LTE i j -> LTE (power (S b) i) (power (S b) j)
-powerMonotonicExp Z Z b lte = lteRefl
-powerMonotonicExp (S i') Z b lte = absurd (succNotLTEzero lte)
-powerMonotonicExp Z (S j') b lte = nonzeroPowerGTE1 b (S j')
-powerMonotonicExp (S i') (S j') b lte = multMonotonicLeft (S b) ind where
-    ind : LTE (power (S b) i') (power (S b) j')
-    ind = powerMonotonicExp i' j' b (fromLteSucc lte)
-
-powerMonotonicExp' : (b : Nat) -> {i,j : Nat} -> LTE i j -> LTE (power (S b) i) (power (S b) j)
-powerMonotonicExp' b {i} {j} = powerMonotonicExp i j b
-
-multDistributesOverSuccLeft : (n : Nat) -> (m : Nat) -> n + (mult m n) = mult n (S m)
-multDistributesOverSuccLeft n m = rewrite multCommutative n (S m) in Refl
-
-aPlusBMinusAIsB : (a : Nat) -> (b : Nat) -> {smaller : LTE a b} -> (a + (b - a)) = b
-aPlusBMinusAIsB Z Z = Refl
-aPlusBMinusAIsB (S x) Z {smaller} = absurd (succNotLTEzero smaller)
-aPlusBMinusAIsB Z (S y) = Refl
-aPlusBMinusAIsB (S x) (S y) {smaller} = cong (aPlusBMinusAIsB x y {smaller=fromLteSucc smaller})
+powerMonotonicExp : (b : Nat) -> monotonicInc (\x => power (S b) x)
+powerMonotonicExp b = mono where
+    mono : {i, j : Nat} -> LTE i j -> LTE (power (S b) i) (power (S b) j)
+    mono {i=Z} {j=Z} lte = lteRefl
+    mono {i=S i'} {j=Z} lte = absurd (succNotLTEzero lte)
+    mono {i=Z} {j=S j'} lte = nonzeroPowerGTE1 b (S j')
+    mono {i=S i'} {j=S j'} lte = multMonotonicLeft (S b) ind where
+        ind : LTE (power (S b) i') (power (S b) j')
+        ind = mono (fromLteSucc lte)
 
 lteMaximum : (LTE a (maximum a b), LTE b (maximum a b))
 lteMaximum {a=Z} {b} = (LTEZero, lteRefl)
@@ -209,40 +155,6 @@ lteMaximum {a=S a'} {b=S b'} = (LTESucc (fst ind), LTESucc (snd ind)) where
 maximumLTE : LTE a b -> maximum a b = b
 maximumLTE LTEZero = Refl
 maximumLTE (LTESucc lte) = rewrite maximumLTE lte in Refl
-
-mapAll : {P, Q : a -> Type} -> (f : (x : a) -> P x -> Q x) -> All P xs -> All Q xs
-mapAll _ Nil = Nil
-mapAll {xs=i :: is} f (j :: js) = f i j :: mapAll f js
-
-Maximum : Nat -> Nat -> Nat
-Maximum = maximum -- hack around implicit capture
-
-{-
-maximumVecBound : (vec : Vect (S n) Nat) -> All (\e => LTE e (foldr1 Maximum vec)) vec
-maximumVecBound (x :: []) = [lteRefl]
-maximumVecBound {n=S m} (x :: xs) = step where
-    maxElt : Nat
-    maxElt = foldr1 maximum xs
-    ind : All (\e => LTE e maxElt) xs
-    ind = maximumVecBound xs
-    p1 : (LTE x (maximum x maxElt), LTE maxElt (maximum x maxElt))
-    p1 = lteMaximum
-    --p2 : Maximum x (foldr Maximum Z xs) = foldr Maximum Z (x :: xs)
-    --p2 = Refl
-    step : All (\e => LTE e (foldr Maximum x xs)) (x :: xs)
-    step = ?z
-    --step = fst p1 :: mapAll {P=(\e => LTE e maxElt)} {Q=(\e => LTE e (maximum x maxElt))} (\e, lte => lte `lteTransitive` snd p1)
--}
-
-{-
-sumBoundedByKMax : (vec : Vect (S n) Nat) -> LTE (foldr (+) Z vec) (S n * foldr Maximum Z vec)
-sumBoundedByKMax (x :: []) = rewrite maximumZeroNLeft x in lteRefl
-sumBoundedByKMax {n=S m} (x :: xs) = ?sumBound where
-    p1 : LTE (foldr (+) Z xs) (S m * foldr Maximum Z xs)
-    p1 = sumBoundedByKMax xs
-    p2 : LTE (x + foldr (+) Z xs) (x + S m * foldr Maximum Z xs)
-    p2 = plusMonotonic x p1
--}
 
 addLTE : LTE a b -> LTE x y -> LTE (a + x) (b + y)
 addLTE {a} {b} {x} {y} ab xy = left `lteTransitive` right where
@@ -283,34 +195,23 @@ checkLTE (S n) (S m) = case checkLTE n m of
     Left x => Left (LTESucc x)
     Right x => Right (LTESucc x)
 
-monotonicImpliesMaxHomomorphicLemma : {f : Nat -> Nat} -> ({n, m : Nat} -> LTE n m -> LTE (f n) (f m)) -> LTE a b -> maximum (f a) (f b) = f (maximum a b)
-monotonicImpliesMaxHomomorphicLemma {f} mono {a} {b} lte_ab = rewrite left in right where
+monotonicIncImpliesMaxHomomorphicLemma : {f : Nat -> Nat} -> ({n, m : Nat} -> LTE n m -> LTE (f n) (f m)) -> LTE a b -> maximum (f a) (f b) = f (maximum a b)
+monotonicIncImpliesMaxHomomorphicLemma {f} mono {a} {b} lte_ab = rewrite left in right where
     left : maximum (f a) (f b) = f b
     left = maximumLTE (mono lte_ab)
     right : f b = f (maximum a b)
     right = rewrite maximumLTE lte_ab in Refl
 
-monotonicImpliesMaxHomomorphic : {f : Nat -> Nat} -> ({n, m : Nat} -> LTE n m -> LTE (f n) (f m)) -> maximum (f a) (f b) = f (maximum a b)
-monotonicImpliesMaxHomomorphic {f} {a} {b} mono = case checkLTE a b of
-    Left lte_ab => monotonicImpliesMaxHomomorphicLemma mono lte_ab
-    Right lte_ba => rewrite maximumCommutative (f a) (f b) in rewrite maximumCommutative a b in monotonicImpliesMaxHomomorphicLemma mono lte_ba
+monotonicIncImpliesMaxHomomorphic : {f : Nat -> Nat} -> ({n, m : Nat} -> LTE n m -> LTE (f n) (f m)) -> maximum (f a) (f b) = f (maximum a b)
+monotonicIncImpliesMaxHomomorphic {f} {a} {b} mono = case checkLTE a b of
+    Left lte_ab => monotonicIncImpliesMaxHomomorphicLemma mono lte_ab
+    Right lte_ba => rewrite maximumCommutative (f a) (f b) in rewrite maximumCommutative a b in monotonicIncImpliesMaxHomomorphicLemma mono lte_ba
 
 data Tern = Root | Branch Tern Tern Tern
-
-data CompleteTree : (n : Nat) -> Type where
-    CRoot : CompleteTree (S n)
-    CBranch : Vect (S n) (CompleteTree (S n)) -> CompleteTree (S n)
 
 height : Tern -> Nat
 height Root = 0
 height (Branch t1 t2 t3) = S ((height t1 `maximum` height t2) `maximum` height t3)
-
-{-
-height' : CompleteTree n -> Nat
-height' CRoot = 0
---height' (CBranch subtrees) = Data.Vect.foldl1 max (map height' subtrees)
-height' (CBranch subtrees) = foldr (\subtree, acc => max acc (height' subtree)) Z subtrees
--}
 
 nodes : Tern -> Nat
 nodes Root = 1
@@ -321,7 +222,7 @@ hb_f h = (-) (power 3 (S h)) 1 {smaller=nonzeroPowerGTE1 2 (S h)}
 --hb_f = (\x => x `minus` 1) . (\x => power 3 x) . S
 
 mono_hb_f : LTE n m -> LTE (hb_f n) (hb_f m)
-mono_hb_f = composeMonotonic (minusMonotonicLeft 1) (powerMonotonicExp' 2) `composeMonotonic` LTESucc
+mono_hb_f = composeMonotonic (minusMonotonicLeft 1) (powerMonotonicExp 2) `composeMonotonic` LTESucc
 
 height_bound : (t : Tern) -> LTE (nodes t) (hb_f (height t))
 height_bound Root = lteAddRight 1
@@ -332,11 +233,13 @@ height_bound (Branch t1 t2 t3) = goal where
     r1 = hb_f (height t1)
     r2 = hb_f (height t2)
     r3 = hb_f (height t3)
+    maxHeight : Nat
+    maxHeight = (maximum (height t1) (height t2) `maximum` height t3)
     s1 : maximum r1 r2 = hb_f (maximum (height t1) (height t2))
-    s1 = monotonicImpliesMaxHomomorphic mono_hb_f
-    s2 : hb_f (maximum (height t1) (height t2)) `maximum` r3 = hb_f (maximum (height t1) (height t2) `maximum` (height t3))
-    s2 = monotonicImpliesMaxHomomorphic mono_hb_f
-    s3 : maximum r1 r2 `maximum` r3 = hb_f (maximum (height t1) (height t2) `maximum` height t3)
+    s1 = monotonicIncImpliesMaxHomomorphic mono_hb_f
+    s2 : hb_f (maximum (height t1) (height t2)) `maximum` r3 = hb_f maxHeight
+    s2 = monotonicIncImpliesMaxHomomorphic mono_hb_f
+    s3 : maximum r1 r2 `maximum` r3 = hb_f maxHeight
     s3 = rewrite s1 in s2
     ind1 : LTE (nodes t1) r1
     ind1 = height_bound t1
@@ -344,8 +247,6 @@ height_bound (Branch t1 t2 t3) = goal where
     ind2 = height_bound t2
     ind3 : LTE (nodes t3) r3
     ind3 = height_bound t3
-    maxHeight : Nat
-    maxHeight = (maximum (height t1) (height t2) `maximum` height t3)
     p1 : LTE (nodes t1 + nodes t2 + nodes t3) (r1 + r2 + r3)
     p1 = addLTE ind1 ind2 `addLTE` ind3
     p2 : LTE (r1 + r2 + r3) (3 * (maximum r1 r2 `maximum` r3))
