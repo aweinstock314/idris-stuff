@@ -21,6 +21,9 @@ implication_as_or : LEM a -> (a -> b) -> Either (Not a) b
 implication_as_or (Left nota) _ = Left nota
 implication_as_or (Right a) f = Right (f a)
 
+iao_implies_lem : ({a,b : Type} -> (a -> b) -> Either (Not a) b) -> LEM c
+iao_implies_lem f = f id
+
 lem_context : (LEM a -> b) -> Not (Not b)
 lem_context {a} f notb = absurd (notb (f (Left g))) where
     g : Not a
